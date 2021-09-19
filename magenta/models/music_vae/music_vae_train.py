@@ -144,6 +144,19 @@ def train(train_dir,
           num_sync_workers=0,
           num_ps_tasks=0,
           task=0):
+  print("These are the arguments====================================")
+  print(train_dir,
+          config,
+          dataset_fn,
+          checkpoints_to_keep,
+          keep_checkpoint_every_n_hours,
+          num_steps,
+          master,
+          num_sync_workers,
+          num_ps_tasks,
+          task)
+          100 1 200000  0 0 0
+  print("These are the arguments====================================")
   """Train loop."""
   tf.gfile.MakeDirs(train_dir)
   is_chief = (task == 0)
