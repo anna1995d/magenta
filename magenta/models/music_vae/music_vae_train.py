@@ -155,7 +155,7 @@ def train(train_dir,
           num_sync_workers,
           num_ps_tasks,
           task)
-          100 1 200000  0 0 0
+          #100 1 200000  0 0 0
   print("These are the arguments====================================")
   """Train loop."""
   tf.gfile.MakeDirs(train_dir)
