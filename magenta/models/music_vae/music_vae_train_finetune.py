@@ -48,14 +48,14 @@ flags.DEFINE_string(
     'training and evaluation. Separate subdirectories `train` and `eval` '
     'will be created within this directory.')
 flags.DEFINE_integer(
-    'num_steps', 200000,
+    'num_steps', 2000, #200000
     'Number of training steps or `None` for infinite.')
 flags.DEFINE_integer(
     'eval_num_batches', None,
     'Number of batches to use during evaluation or `None` for all batches '
     'in the data source.')
 flags.DEFINE_integer(
-    'checkpoints_to_keep', 100,
+    'checkpoints_to_keep', 10, #100
     'Maximum number of checkpoints to keep in `train` mode or 0 for infinite.')
 flags.DEFINE_integer(
     'keep_checkpoint_every_n_hours', 1,
@@ -158,7 +158,7 @@ def train(run_dir,
 
   train_dir = os.path.join(run_dir, 'train')
   checkpoint_path = BASE_DIR + '/checkpoints/' + config_name[4:] + '.ckpt'
-  batch_size = 4
+  batch_size = 512
 
   tf.gfile.MakeDirs(train_dir)
   is_chief = (task == 0)
@@ -293,7 +293,7 @@ def train(run_dir,
           logdir=train_dir,
           scaffold=scaffold,
           hooks=hooks,
-          save_checkpoint_secs=60,
+          save_checkpoint_secs=300,
           master=master,
           is_chief=is_chief)    
 
