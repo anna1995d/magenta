@@ -39,7 +39,7 @@ flags.DEFINE_string(
     'training and evaluation. Separate subdirectories `train` and `eval` '
     'will be created within this directory.')
 flags.DEFINE_integer(
-    'num_steps', 2000,
+    'num_steps', 1000,
     'Number of training steps or `None` for infinite.')
 flags.DEFINE_integer(
     'eval_num_batches', None,
@@ -108,13 +108,13 @@ def _trial_summary(hparams, examples_path, output_dir):
     writer.add_summary(hparam_summary.eval())
     writer.close()
 
-
 def _get_input_tensors(dataset, config):
   """Get input tensors from dataset."""
   batch_size = config.hparams.batch_size
   iterator = tf.data.make_one_shot_iterator(dataset)
   (input_sequence, output_sequence, control_sequence,
    sequence_length) = iterator.get_next()
+  tf.logging.debug("next element")
   input_sequence.set_shape(
       [batch_size, None, config.data_converter.input_depth])
   output_sequence.set_shape(
@@ -240,8 +240,9 @@ def evaluate(train_dir,
                 config.data_converter.output_depth,
                 is_training=False)
 
-    eval_op = model.eval(
-        **_get_input_tensors(dataset_fn().take(num_batches), config))
+    dataset = dataset_fn().take(num_batches)
+
+    eval_op = model.eval(**_get_input_tensors(dataset, config))
 
     hooks = [
         tf_slim.evaluation.StopAfterNEvalsHook(num_batches),
@@ -251,8 +252,7 @@ def evaluate(train_dir,
     tf_slim.evaluation.evaluate_once(
       logdir=eval_dir,
       master=master,
-      checkpoint_path=os.path.join(train_dir, 'model.ckpt-2000') ,
-      num_evals=2000,
+      checkpoint_path=os.path.join(train_dir, 'model.ckpt-1000'),
       eval_op=eval_op,
       hooks=hooks)
 
@@ -335,6 +335,11 @@ def run(config_map,
         config.tfds_name,
         config.data_converter,
         file_reader) // config.hparams.batch_size
+    print("=======================================")
+    print("Batch size = ", config.hparams.batch_size)
+    print("num_batches = ", num_batches)
+    print("=======================================")
+
     eval_dir = os.path.join(run_dir, 'eval' + FLAGS.eval_dir_suffix)
     evaluate(
         train_dir,
@@ -343,6 +348,7 @@ def run(config_map,
         dataset_fn=dataset_fn,
         num_batches=num_batches,
         master=FLAGS.master)
+
 
 
 def main(unused_argv):

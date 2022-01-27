@@ -48,14 +48,14 @@ flags.DEFINE_string(
     'training and evaluation. Separate subdirectories `train` and `eval` '
     'will be created within this directory.')
 flags.DEFINE_integer(
-    'num_steps', 2000, #200000
+    'num_steps', 500, #200000
     'Number of training steps or `None` for infinite.')
 flags.DEFINE_integer(
     'eval_num_batches', None,
     'Number of batches to use during evaluation or `None` for all batches '
     'in the data source.')
 flags.DEFINE_integer(
-    'checkpoints_to_keep', 10, #100
+    'checkpoints_to_keep', 100, #100
     'Maximum number of checkpoints to keep in `train` mode or 0 for infinite.')
 flags.DEFINE_integer(
     'keep_checkpoint_every_n_hours', 1,
@@ -143,11 +143,11 @@ def _get_input_tensors(dataset, config):
   }
 
 
-def train(run_dir,
+def train(train_dir,
           config,
           config_name,
           dataset_fn,
-          checkpoints_to_keep=5,
+          checkpoints_to_keep=100,
           keep_checkpoint_every_n_hours=1,
           num_steps=None,
           master='',
@@ -156,9 +156,9 @@ def train(run_dir,
           task=0):
   """Train loop."""
 
-  train_dir = os.path.join(run_dir, 'train')
+  # train_dir = os.path.join(run_dir, 'train')
   checkpoint_path = BASE_DIR + '/checkpoints/' + config_name[4:] + '.ckpt'
-  batch_size = 512
+  batch_size = 64
 
   tf.gfile.MakeDirs(train_dir)
   is_chief = (task == 0)
@@ -293,7 +293,7 @@ def train(run_dir,
           logdir=train_dir,
           scaffold=scaffold,
           hooks=hooks,
-          save_checkpoint_secs=300,
+          save_checkpoint_secs=60,
           master=master,
           is_chief=is_chief)    
 
@@ -452,19 +452,28 @@ def evaluate(train_dir,
                 config.data_converter.output_depth,
                 is_training=False)
 
-    eval_op = model.eval(
-        **_get_input_tensors(dataset_fn().take(num_batches), config))
+    dataset = dataset_fn().take(num_batches)
+
+    eval_op = model.eval(**_get_input_tensors(dataset, config))
 
     hooks = [
         tf_slim.evaluation.StopAfterNEvalsHook(num_batches),
         tf_slim.evaluation.SummaryAtEndHook(eval_dir)
     ]
-    tf_slim.evaluation.evaluate_repeatedly(
-        train_dir,
-        eval_ops=eval_op,
-        hooks=hooks,
-        eval_interval_secs=60,
-        master=master)
+
+    tf_slim.evaluation.evaluate_once(
+      logdir=eval_dir,
+      master=master,
+      checkpoint_path=os.path.join(train_dir, 'model.ckpt-500'),
+      eval_op=eval_op,
+      hooks=hooks)
+
+    # tf_slim.evaluation.evaluate_repeatedly(
+    #     train_dir,
+    #     eval_ops=eval_op,
+    #     hooks=hooks,
+    #     eval_interval_secs=60,
+    #     master=master)
 
 
 def run(config_map,
@@ -483,6 +492,7 @@ def run(config_map,
   if not FLAGS.run_dir:
     raise ValueError('Invalid run directory: %s' % FLAGS.run_dir)
   run_dir = os.path.expanduser(FLAGS.run_dir)
+  train_dir = os.path.join(run_dir, 'train')
 
   if FLAGS.mode not in ['train', 'eval']:
     raise ValueError('Invalid mode: %s' % FLAGS.mode)
@@ -523,7 +533,7 @@ def run(config_map,
 
   if is_training:
     train(
-        run_dir,
+        train_dir,
         config=config,
         config_name=FLAGS.config,
         dataset_fn=dataset_fn,
