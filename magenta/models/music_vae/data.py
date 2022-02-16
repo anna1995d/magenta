@@ -660,7 +660,10 @@ class OneHotMelodyConverter(LegacyEventListOneHotConverter):
   """
 
   def __init__(self, min_pitch=PIANO_MIN_MIDI_PITCH,
-               max_pitch=PIANO_MAX_MIDI_PITCH, valid_programs=None,
+               max_pitch=PIANO_MAX_MIDI_PITCH, 
+               mel_mode='standard', 
+               min_unique_pitches=1,
+               valid_programs=None,
                skip_polyphony=False, max_bars=None, slice_bars=None,
                gap_bars=1.0, steps_per_quarter=4, quarters_per_bar=4,
                add_end_token=False, pad_to_total_time=False,
@@ -674,6 +677,7 @@ class OneHotMelodyConverter(LegacyEventListOneHotConverter):
           ignored.
       max_pitch: The maximum pitch to model. Those above this value will be
           ignored.
+      mode: 'standard', 'skyline1', 'skyline2'
       valid_programs: Optional set of program numbers to allow.
       skip_polyphony: Whether to skip polyphonic instruments. If False, the
           highest pitch will be taken in polyphonic sections.
@@ -702,6 +706,8 @@ class OneHotMelodyConverter(LegacyEventListOneHotConverter):
     self._min_pitch = min_pitch
     self._max_pitch = max_pitch
     self._valid_programs = valid_programs
+    self._mel_mode = mel_mode
+    self._min_unique_pitches = min_unique_pitches
     steps_per_bar = steps_per_quarter * quarters_per_bar
     max_steps_truncate = steps_per_bar * max_bars if max_bars else None
 
@@ -715,10 +721,12 @@ class OneHotMelodyConverter(LegacyEventListOneHotConverter):
 
     melody_extractor_fn = functools.partial(
         melody_pipelines.extract_melodies,
+        mel_mode=self._mel_mode,
         min_bars=1,
         gap_bars=gap_bars or float('inf'),
         max_steps_truncate=max_steps_truncate,
-        min_unique_pitches=1,
+        # min_unique_pitches=1,
+        min_unique_pitches=self._min_unique_pitches,
         ignore_polyphonic_notes=not skip_polyphony,
         pad_end=True)
     super(OneHotMelodyConverter, self).__init__(

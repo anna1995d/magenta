@@ -249,12 +249,15 @@ def evaluate(train_dir,
         tf_slim.evaluation.SummaryAtEndHook(eval_dir)
     ]
 
+    new_path = '/content/drive/MyDrive/Magenta/magenta/data/checkpoints/cat-mel_2bar_big.ckpt.data-00000-of-00001'
+
     tf_slim.evaluation.evaluate_once(
-      logdir=eval_dir,
-      master=master,
-      checkpoint_path=os.path.join(train_dir, 'model.ckpt-1000'),
-      eval_op=eval_op,
-      hooks=hooks)
+    logdir=eval_dir,
+    master=master,
+    checkpoint_path=new_path,
+    # checkpoint_path=os.path.join('train_dir, 'model.ckpt-1000''),
+    eval_op=eval_op,
+    hooks=hooks)
 
     # tf_slim.evaluation.evaluate_repeatedly(
     #     train_dir,

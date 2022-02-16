@@ -104,7 +104,8 @@ CONFIG_MAP['cat-mel_2bar_big'] = Config(
     eval_examples_path=None,
 )
 
-CONFIG_MAP['cat-mel_2bar_big'] = Config(
+#skyline melody extractor config
+CONFIG_MAP['cat-mel_2bar_big_sky1'] = Config(
     model=MusicVAE(lstm_models.BidirectionalLstmEncoder(),
                    lstm_models.CategoricalLstmDecoder()),
     hparams=merge_hparams(
@@ -120,9 +121,12 @@ CONFIG_MAP['cat-mel_2bar_big'] = Config(
             beta_rate=0.99999,
             sampling_schedule='inverse_sigmoid',
             sampling_rate=1000,
+            mel_mode='skyline1',
         )),
     note_sequence_augmenter=data.NoteSequenceAugmenter(transpose_range=(-5, 5)),
     data_converter=data.OneHotMelodyConverter(
+        mel_mode='skyline1',
+        min_unique_pitches=1,
         valid_programs=data.MEL_PROGRAMS,
         skip_polyphony=False,
         max_bars=100,  # Truncate long melodies before slicing.
@@ -132,8 +136,36 @@ CONFIG_MAP['cat-mel_2bar_big'] = Config(
     eval_examples_path=None,
 )
 
-# Test config for 'cat-mel_2bar_big'
-
+CONFIG_MAP['cat-mel_2bar_big_sky2'] = Config(
+    model=MusicVAE(lstm_models.BidirectionalLstmEncoder(),
+                   lstm_models.CategoricalLstmDecoder()),
+    hparams=merge_hparams(
+        lstm_models.get_default_hparams(),
+        HParams(
+            batch_size=512,
+            max_seq_len=32,  # 2 bars w/ 16 steps per bar
+            z_size=512,
+            enc_rnn_size=[2048],
+            dec_rnn_size=[2048, 2048, 2048],
+            free_bits=0,
+            max_beta=0.5,
+            beta_rate=0.99999,
+            sampling_schedule='inverse_sigmoid',
+            sampling_rate=1000,
+            mel_mode='skyline2',
+        )),
+    note_sequence_augmenter=data.NoteSequenceAugmenter(transpose_range=(-5, 5)),
+    data_converter=data.OneHotMelodyConverter(
+        mel_mode='skyline2',
+        min_unique_pitches=1,
+        valid_programs=data.MEL_PROGRAMS,
+        skip_polyphony=False,
+        max_bars=100,  # Truncate long melodies before slicing.
+        slice_bars=2,
+        steps_per_quarter=4),
+    train_examples_path=None,
+    eval_examples_path=None,
+)
 
 # Chord-Conditioned Melody
 CONFIG_MAP['cat-mel_2bar_med_chords'] = Config(
