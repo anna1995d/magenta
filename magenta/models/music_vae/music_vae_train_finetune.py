@@ -160,6 +160,8 @@ def train(train_dir,
   checkpoint_path = BASE_DIR + '/checkpoints/' + config_name[4:] + '.ckpt'
   batch_size = 64
 
+  
+
   tf.gfile.MakeDirs(train_dir)
   is_chief = (task == 0)
   if is_chief:
@@ -175,78 +177,6 @@ def train(train_dir,
                   config.data_converter.output_depth,
                   is_training=True)
 
-      # # Input placeholders
-      # temperature = tf.placeholder(tf.float32, shape=())
-
-      # if config.hparams.z_size:
-      #   z_input = tf.placeholder(
-      #       tf.float32, shape=[batch_size, config.hparams.z_size])
-      # else:
-      #   z_input = None
-
-      # if config.data_converter.control_depth > 0:
-      #   c_input = tf.placeholder(
-      #       tf.float32, shape=[None, config.data_converter.control_depth])
-      # else:
-      #   c_input = None
-
-      # inputs = tf.placeholder(
-      #     tf.float32,
-      #     shape=[batch_size, None, config.data_converter.input_depth])
-      # controls = tf.placeholder(
-      #     tf.float32,
-      #     shape=[batch_size, None, config.data_converter.control_depth])
-      # inputs_length = tf.placeholder(
-      #     tf.int32,
-      #     shape=[batch_size] + list(config.data_converter.length_shape))
-      # max_length = tf.placeholder(tf.int32, shape=())
-      # # Outputs
-      # outputs, decoder_results = model.sample(
-      #     batch_size,
-      #     max_length=max_length,
-      #     z=z_input,
-      #     c_input=c_input,
-      #     temperature=temperature)#,
-      #     # **sample_kwargs)
-      # if config.hparams.z_size:
-      #   q_z = model.encode(inputs, inputs_length, controls)
-      #   mu = q_z.loc
-      #   sigma = q_z.scale.diag
-      #   z = q_z.sample()
-
-      var_map = None
-      var_name_substitutions = None
-      if var_name_substitutions is not None:
-        var_map = {}
-        for v in tf.global_variables():
-          var_name = v.name[:-2]  # Strip ':0' suffix.
-          for pattern, substitution in var_name_substitutions:
-            var_name = re.sub(pattern, substitution, var_name)
-          if var_name != v.name[:-2]:
-            tf.logging.info('Renaming `%s` to `%s`.', v.name[:-2], var_name)
-          var_map[var_name] = v
-
-      # Restore graph
-      sess = tf.Session()
-      saver = tf.train.Saver(var_map)
-      if (os.path.exists(checkpoint_path) and
-          tarfile.is_tarfile(checkpoint_path)):
-        tf.logging.info('Unbundling checkpoint.')
-        with tempfile.TemporaryDirectory() as temp_dir:
-          tar = tarfile.open(checkpoint_path)
-          tar.extractall(temp_dir)
-          # Assume only a single checkpoint is in the directory.
-          for name in tar.getnames():
-            if name.endswith('.index'):
-              checkpoint_path = os.path.join(temp_dir, name[0:-6])
-              break
-          saver.restore(sess, checkpoint_path)
-      else:
-        saver.restore(sess, checkpoint_path)
-
-      
-
-
       optimizer = model.train(**_get_input_tensors(dataset_fn(), config))
 
       hooks = []
@@ -257,6 +187,7 @@ def train(train_dir,
         hooks.append(optimizer.make_session_run_hook(is_chief))
 
       grads, var_list = list(zip(*optimizer.compute_gradients(model.loss)))
+
       global_norm = tf.global_norm(grads)
       tf.summary.scalar('global_norm', global_norm)
 
@@ -272,8 +203,30 @@ def train(train_dir,
       else:
         raise ValueError(
             'Unknown clip_mode: {}'.format(config.hparams.clip_mode))
+
+      # Create init_fn to initialize the Model from checkpoint
+      # VERY USEFUL function to list all model variables: 
+      # tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES)
+      variables_to_restore = [v for v in tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES) if v.name!='global_step:0']
+      from tf_slim.ops.variables import assign_from_checkpoint_fn
+      init_fn = assign_from_checkpoint_fn(checkpoint_path, variables_to_restore)
+
+      print("=================================================")
+      print("==================Finetune INFO==================")
+      var_selection = ['decoder/output_projection/kernel:0', 'decoder/output_projection/bias:0']
+      print("Training weights are...")
+      for v in var_selection: print(v)
+      print("================================================")
+
+      # Training (not frozen) weights and their clipped grad is listed
+      clippedgrad_var_pair_list = list()
+      for i in range(len(var_list)):
+        if var_list[i].name in var_selection:
+          clippedgrad_var_pair_list.append([clipped_grads[i], var_list[i]])
+      
       train_op = optimizer.apply_gradients(
-          list(zip(clipped_grads, var_list)),
+          clippedgrad_var_pair_list,
+          # list(zip(clipped_grads, var_list)),
           global_step=model.global_step,
           name='train_step')
 
@@ -285,9 +238,13 @@ def train(train_dir,
         hooks.append(tf.train.StopAtStepHook(last_step=num_steps))
 
       scaffold = tf.train.Scaffold(
-          saver=tf.train.Saver(
-              max_to_keep=checkpoints_to_keep,
-              keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours))
+        # init_fn=init_fn, # This doesn't work because of a lambda in tf source
+        saver=tf.train.Saver(
+          max_to_keep=checkpoints_to_keep,
+          keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours))
+
+      scaffold._init_fn = init_fn # The hack to add init_fn
+
       tf_slim.training.train(
           train_op=train_op,
           logdir=train_dir,
@@ -296,143 +253,6 @@ def train(train_dir,
           save_checkpoint_secs=60,
           master=master,
           is_chief=is_chief)    
-
-      # # Input placeholders
-      # self._temperature = tf.placeholder(tf.float32, shape=())
-
-      # if self._config.hparams.z_size:
-      #   self._z_input = tf.placeholder(
-      #       tf.float32, shape=[batch_size, self._config.hparams.z_size])
-      # else:
-      #   self._z_input = None
-
-      # if self._config.data_converter.control_depth > 0:
-      #   self._c_input = tf.placeholder(
-      #       tf.float32, shape=[None, self._config.data_converter.control_depth])
-      # else:
-      #   self._c_input = None
-
-      # self._inputs = tf.placeholder(
-      #     tf.float32,
-      #     shape=[batch_size, None, self._config.data_converter.input_depth])
-      # self._controls = tf.placeholder(
-      #     tf.float32,
-      #     shape=[batch_size, None, self._config.data_converter.control_depth])
-      # self._inputs_length = tf.placeholder(
-      #     tf.int32,
-      #     shape=[batch_size] + list(self._config.data_converter.length_shape))
-      # self._max_length = tf.placeholder(tf.int32, shape=())
-
-      # # Outputs
-      # self._outputs, self._decoder_results = model.sample(
-      #     batch_size,
-      #     max_length=self._max_length,
-      #     z=self._z_input,
-      #     c_input=self._c_input,
-      #     temperature=self._temperature,
-      #     **sample_kwargs)
-      # if self._config.hparams.z_size:
-      #   q_z = model.encode(self._inputs, self._inputs_length, self._controls)
-      #   self._mu = q_z.loc
-      #   self._sigma = q_z.scale.diag
-      #   self._z = q_z.sample()
-
-      # var_map = None
-      # if var_name_substitutions is not None:
-      #   var_map = {}
-      #   for v in tf.global_variables():
-      #     var_name = v.name[:-2]  # Strip ':0' suffix.
-      #     for pattern, substitution in var_name_substitutions:
-      #       var_name = re.sub(pattern, substitution, var_name)
-      #     if var_name != v.name[:-2]:
-      #       tf.logging.info('Renaming `%s` to `%s`.', v.name[:-2], var_name)
-      #     var_map[var_name] = v
-
-      # # Restore graph
-      # self._sess = tf.Session(target=session_target)
-      # saver = tf.train.Saver(var_map)
-      # if (os.path.exists(checkpoint_path) and
-      #     tarfile.is_tarfile(checkpoint_path)):
-      #   tf.logging.info('Unbundling checkpoint.')
-      #   with tempfile.TemporaryDirectory() as temp_dir:
-      #     tar = tarfile.open(checkpoint_path)
-      #     tar.extractall(temp_dir)
-      #     # Assume only a single checkpoint is in the directory.
-      #     for name in tar.getnames():
-      #       if name.endswith('.index'):
-      #         checkpoint_path = os.path.join(temp_dir, name[0:-6])
-      #         break
-      #     saver.restore(self._sess, checkpoint_path)
-      # else:
-      #   saver.restore(self._sess, checkpoint_path)
-
-      # optimizer = model.train(**_get_input_tensors(dataset_fn(), config))
-
-      # hooks = []
-      # if num_sync_workers:
-      #   optimizer = tf.train.SyncReplicasOptimizer(
-      #       optimizer,
-      #       num_sync_workers)
-      #   hooks.append(optimizer.make_session_run_hook(is_chief))
-
-      # grads, var_list = list(zip(*optimizer.compute_gradients(model.loss)))
-      # global_norm = tf.global_norm(grads)
-      # tf.summary.scalar('global_norm', global_norm)
-
-      # if config.hparams.clip_mode == 'value':
-      #   g = config.hparams.grad_clip
-      #   clipped_grads = [tf.clip_by_value(grad, -g, g) for grad in grads]
-      # elif config.hparams.clip_mode == 'global_norm':
-      #   clipped_grads = tf.cond(
-      #       global_norm < config.hparams.grad_norm_clip_to_zero,
-      #       lambda: tf.clip_by_global_norm(  # pylint:disable=g-long-lambda
-      #           grads, config.hparams.grad_clip, use_norm=global_norm)[0],
-      #       lambda: [tf.zeros(tf.shape(g)) for g in grads])
-      # else:
-      #   raise ValueError(
-      #       'Unknown clip_mode: {}'.format(config.hparams.clip_mode))
-      # train_op = optimizer.apply_gradients(
-      #     list(zip(clipped_grads, var_list)),
-      #     global_step=model.global_step,
-      #     name='train_step')
-
-      # logging_dict = {'global_step': model.global_step,
-      #                 'loss': model.loss}
-
-      # hooks.append(tf.train.LoggingTensorHook(logging_dict, every_n_iter=100))
-      # if num_steps:
-      #   hooks.append(tf.train.StopAtStepHook(last_step=num_steps))
-        
-      # sess = tf.Session()
-      # saver = tf.train.Saver(max_to_keep=checkpoints_to_keep,
-      #         keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours)
-      # if (os.path.exists(checkpoint_path) and
-      #     tarfile.is_tarfile(checkpoint_path)):
-      #   tf.logging.info('Unbundling checkpoint.')
-      #   with tempfile.TemporaryDirectory() as temp_dir:
-      #     tar = tarfile.open(checkpoint_path)
-      #     tar.extractall(temp_dir)
-      #     # Assume only a single checkpoint is in the directory.
-      #     for name in tar.getnames():
-      #       if name.endswith('.index'):
-      #         checkpoint_path = os.path.join(temp_dir, name[0:-6])
-      #         break
-      #     saver.restore(sess, checkpoint_path)
-      # else:
-      #   saver.restore(sess, checkpoint_path)
-
-      # scaffold = tf.train.Scaffold(saver=tf.train.Saver(
-      #         max_to_keep=checkpoints_to_keep,
-      #         keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours))
-   
-      # tf_slim.training.train(
-      #     train_op=train_op,
-      #     logdir=train_dir,
-      #     scaffold=scaffold,
-      #     hooks=hooks,
-      #     save_checkpoint_secs=60,
-      #     master=master,
-      #     is_chief=is_chief)
 
 
 def evaluate(train_dir,
