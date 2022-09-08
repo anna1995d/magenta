@@ -55,7 +55,7 @@ flags.DEFINE_integer(
     'Number of batches to use during evaluation or `None` for all batches '
     'in the data source.')
 flags.DEFINE_integer(
-    'checkpoints_to_keep', 100, #100
+    'checkpoints_to_keep', 0, #100
     'Maximum number of checkpoints to keep in `train` mode or 0 for infinite.')
 flags.DEFINE_integer(
     'keep_checkpoint_every_n_hours', 1,
@@ -176,12 +176,16 @@ def train(run_dir,
           num_ps_tasks=0,
           task=0,
           finetune=False,
-          trainable_vars='all'):
+          trainable_vars='all',
+          ckpt_no=-1):
   """Train loop."""
 
   train_dir = os.path.join(run_dir, 'train')
   if finetune:
-    checkpoint_path = BASE_DIR + '/checkpoints/' + config_name[4:] + '.ckpt'
+    if ckpt_no >= 0:
+      checkpoint_path = os.path.join(run_dir, 'train/model.ckpt-{}'.format(ckpt_no))
+    else:
+      checkpoint_path = BASE_DIR + '/checkpoints/' + config_name[4:] + '.ckpt'
 
   tf.gfile.MakeDirs(train_dir)
   is_chief = (task == 0)
@@ -319,10 +323,10 @@ def evaluate(run_dir,
     # Create init_fn to initialize the Model from checkpoint
     # VERY USEFUL function to list all model variables: 
     # tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES)
-    variables_to_restore = [v for v in 
-    tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES) if v.name!='global_step:0']
-    from tf_slim.ops.variables import assign_from_checkpoint_fn
-    init_fn = assign_from_checkpoint_fn(checkpoint_path, variables_to_restore)
+    # variables_to_restore = [v for v in 
+    # tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES) if v.name!='global_step:0']
+    # from tf_slim.ops.variables import assign_from_checkpoint_fn
+    # init_fn = assign_from_checkpoint_fn(checkpoint_path, variables_to_restore)
 
     tf_slim.evaluation.evaluate_once(
       logdir=eval_dir,

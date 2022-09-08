@@ -127,15 +127,17 @@ class BaseDecoder(object, metaclass=abc.ABCMeta):
 class MusicVAE(object):
   """Music Variational Autoencoder."""
 
-  def __init__(self, encoder, decoder):
-    """Initializer for a MusicVAE model.
+  def __init__(self, encoder, decoder, name_or_scope=''):
+    """Initialize for a MusicVAE model.
 
     Args:
       encoder: A BaseEncoder implementation class to use.
       decoder: A BaseDecoder implementation class to use.
     """
+  
     self._encoder = encoder
     self._decoder = decoder
+    self._name_or_scope = name_or_scope
 
   def build(self, hparams, output_depth, is_training):
     """Builds encoder and decoder.
@@ -153,8 +155,10 @@ class MusicVAE(object):
                     self.decoder.__class__.__name__, hparams.values())
     self.global_step = tf.train.get_or_create_global_step()
     self._hparams = hparams
-    self._encoder.build(hparams, is_training)
-    self._decoder.build(hparams, output_depth, is_training)
+    if len(self._name_or_scope):
+      self._name_or_scope += '/'
+    self._encoder.build(hparams, is_training, self._name_or_scope + 'encoder')
+    self._decoder.build(hparams, output_depth, is_training, self._name_or_scope + 'decoder')
 
   @property
   def encoder(self):
@@ -196,13 +200,13 @@ class MusicVAE(object):
     mu = tf.layers.dense(
         encoder_output,
         z_size,
-        name='encoder/mu',
+        name= self._name_or_scope + 'encoder/mu',
         kernel_initializer=tf.random_normal_initializer(stddev=0.001))
     sigma = tf.layers.dense(
         encoder_output,
         z_size,
         activation=tf.nn.softplus,
-        name='encoder/sigma',
+        name= self._name_or_scope + 'encoder/sigma',
         kernel_initializer=tf.random_normal_initializer(stddev=0.001))
 
     return ds.MultivariateNormalDiag(loc=mu, scale_diag=sigma)
