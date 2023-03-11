@@ -334,7 +334,8 @@ class MusicVAE(object):
     for metric_name, metric_value in metrics_to_values.items():
       tf.summary.scalar(metric_name, metric_value)
 
-    return list(metrics_to_updates.values())
+    # return list(metrics_to_values.values()), list(metrics_to_updates.values())
+    return metrics_to_values, metrics_to_updates
 
   def sample(self, n, max_length=None, z=None, c_input=None, **kwargs):
     """Sample with an optional conditional embedding `z`."""

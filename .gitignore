@@ -1,6 +1,7 @@
 first.ckpt
 data/checkpoints/
 data/tmp/
+data/mcts/
 *.pyc
 *.egg
 .eggs/

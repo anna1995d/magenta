@@ -1788,7 +1788,8 @@ def get_dataset(
     config,
     tf_file_reader=tf.data.TFRecordDataset,
     is_training=False,
-    cache_dataset=True):
+    cache_dataset=True,
+    seed = None):
   """Get input tensors from dataset for training or evaluation.
 
   Args:
@@ -1819,7 +1820,7 @@ def get_dataset(
     if not num_files:
       raise ValueError(
           'No files were found matching examples path: %s' %  examples_path)
-    files = tf.data.Dataset.list_files(examples_path)
+    files = tf.data.Dataset.list_files(examples_path, seed=seed)
     dataset = files.interleave(
         tf_file_reader,
         cycle_length=tf.data.experimental.AUTOTUNE,

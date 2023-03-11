@@ -101,6 +101,9 @@ flags.DEFINE_integer(
   'ckpt_no', 0,
   'If 0 use the official magenta ckpt otherwise the number of the ckpt'
   'in the train_dir.')
+flags.DEFINE_string(
+    'ckpt_path', '',
+    'Path to a checkpoint to load the model from.')
 
 
 def _parse_var_list(var_str):
@@ -177,12 +180,15 @@ def train(run_dir,
           task=0,
           finetune=False,
           trainable_vars='all',
-          ckpt_no=-1):
+          ckpt_no=-1,
+          ckpt_path=None):
   """Train loop."""
 
   train_dir = os.path.join(run_dir, 'train')
   if finetune:
-    if ckpt_no >= 0:
+    if ckpt_path:
+      checkpoint_path = ckpt_path
+    elif ckpt_no >= 0:
       checkpoint_path = os.path.join(run_dir, 'train/model.ckpt-{}'.format(ckpt_no))
     else:
       checkpoint_path = BASE_DIR + '/checkpoints/' + config_name[4:] + '.ckpt'
@@ -273,6 +279,12 @@ def train(run_dir,
           max_to_keep=checkpoints_to_keep,
           keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours))
 
+      hooks.append(tf.estimator.CheckpointSaverHook(
+        checkpoint_dir=train_dir,
+        save_steps=100,
+        checkpoint_basename='model.ckpt',
+        scaffold=scaffold))
+
       if finetune:
         scaffold._init_fn = init_fn # The hack to add init_fn
 
@@ -281,7 +293,7 @@ def train(run_dir,
           logdir=train_dir,
           scaffold=scaffold,
           hooks=hooks,
-          save_checkpoint_secs=60,
+          save_checkpoint_secs=None, #60,
           master=master,
           is_chief=is_chief)    
 
@@ -293,6 +305,7 @@ def evaluate(run_dir,
              dataset_fn,
              num_batches,
              ckpt_no=-1,
+             ckpt_path=None,
              master=''):
 
   """Evaluate the model Once."""
@@ -315,7 +328,9 @@ def evaluate(run_dir,
         tf_slim.evaluation.SummaryAtEndHook(eval_dir)
     ]
 
-    if ckpt_no >= 0:
+    if ckpt_path:
+      checkpoint_path = ckpt_path
+    elif ckpt_no >= 0:
       checkpoint_path = os.path.join(run_dir, 'train/model.ckpt-{}'.format(ckpt_no))
     else:
       checkpoint_path = BASE_DIR + '/checkpoints/' + config_name[4:] + '.ckpt'
@@ -419,7 +434,8 @@ def run(config_map,
         num_ps_tasks=FLAGS.num_ps_tasks,
         task=FLAGS.task,
         finetune = FLAGS.finetune,
-        trainable_vars = trainable_vars
+        trainable_vars = trainable_vars,
+        ckpt_path=FLAGS.ckpt_path
         )
   else:
     num_batches = FLAGS.eval_num_batches or data.count_examples(
@@ -440,6 +456,7 @@ def run(config_map,
         dataset_fn=dataset_fn,
         num_batches=num_batches,
         ckpt_no=FLAGS.ckpt_no,
+        ckpt_path=FLAGS.ckpt_path,
         master=FLAGS.master)
 
 

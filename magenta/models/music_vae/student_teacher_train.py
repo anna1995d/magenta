@@ -323,12 +323,18 @@ def train(run_dir,
 
       scaffold._init_fn = init_fn # The hack to add init_fn
 
+      hooks.append(tf.estimator.CheckpointSaverHook(
+        checkpoint_dir=train_dir,
+        save_steps=100,
+        checkpoint_basename='model.ckpt',
+        scaffold=scaffold))
+
       tf_slim.training.train(
           train_op=train_op,
           logdir=train_dir,
           scaffold=scaffold,
           hooks=hooks,
-          save_checkpoint_secs=60,
+          save_checkpoint_secs=None, #60,
           master=master,
           is_chief=is_chief)    
 
